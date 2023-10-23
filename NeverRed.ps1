@@ -8,7 +8,7 @@ A new folder for every single package will be created, together with a version f
 the script checks the version number and will update the package.
 
 .NOTES
-  Version:          2.10.18
+  Version:          2.10.20
   Author:           Manuel Winkel <www.deyda.net>
   Creation Date:    2021-01-29
 
@@ -221,6 +221,8 @@ the script checks the version number and will update the package.
   2023-06-20        Correct Microsoft Teams Download options
   2023-07-13        Correct Citrix Optimizer Download / Add cleanup for Foxit Reader / Add Windows Update PS Module
   2023-09-21        Correct Google Chrome Download
+  2023-10-05        Correct MS FSLogix Download
+  2023-10-22        Correct MS Teams User Based Download
 
 
 .PARAMETER ESfile
@@ -649,22 +651,16 @@ Function Get-MicrosoftTeamsUser() {
         Break
     }
     Finally {
-        $regexAppVersionx64dev = '\<td id="LC3".+<\/td\>'
+        $regexAppVersionx64dev = 'daily build of Microsoft Teams.{16}'
         $webVersionx64dev = $webRequest.RawContent | Select-String -Pattern $regexAppVersionx64dev -AllMatches | ForEach-Object { $_.Matches.Value } | Select-Object -First 1
-        $webSplitx64dev = $webVersionx64dev.Split("/")
-        $appVersionx64dev = $webSplitx64dev[4]
-        $regexAppVersionx86dev = '\<td id="LC4".+<\/td\>'
-        $webVersionx86dev = $webRequest.RawContent | Select-String -Pattern $regexAppVersionx86dev -AllMatches | ForEach-Object { $_.Matches.Value } | Select-Object -First 1
-        $webSplitx86dev = $webVersionx86dev.Split("/")
-        $appVersionx86dev = $webSplitx86dev[4]
-        $regexAppVersionx64beta = '\<td id="LC11".+<\/td\>'
+        $webSplitx64dev = $webVersionx64dev.Split('\"')
+        $appVersionx64dev = $webSplitx64dev[2]
+        $appVersionx86dev = $appVersionx64dev
+        $regexAppVersionx64beta = 'experimental build of Microsoft Teams.{16}'
         $webVersionx64beta = $webRequest.RawContent | Select-String -Pattern $regexAppVersionx64beta -AllMatches | ForEach-Object { $_.Matches.Value } | Select-Object -First 1
-        $webSplitx64beta = $webVersionx64beta.Split("/")
-        $appVersionx64beta = $webSplitx64beta[4]
-        $regexAppVersionx86beta = '\<td id="LC13".+<\/td\>'
-        $webVersionx86beta = $webRequest.RawContent | Select-String -Pattern $regexAppVersionx86beta -AllMatches | ForEach-Object { $_.Matches.Value } | Select-Object -First 1
-        $webSplitx86beta = $webVersionx86beta.Split("/")
-        $appVersionx86beta = $webSplitx86beta[4]
+        $webSplitx64beta = $webVersionx64beta.Split('\"')
+        $appVersionx64beta = $webSplitx64beta[2]
+        $appVersionx86beta = $appVersionx64beta
         $appx64URLdev = "https://staticsint.teams.cdn.office.net/production-windows-x64/$appVersionx64dev/Teams_windows_x64.exe"
         $appx86URLdev = "https://staticsint.teams.cdn.office.net/production-windows/$appVersionx86dev/Teams_windows.exe"
         $appx64URLbeta = "https://staticsint.teams.cdn.office.net/production-windows-x64/$appVersionx64beta/Teams_windows_x64.exe"
@@ -4102,7 +4098,7 @@ $ErrorActionPreference = 'SilentlyContinue'
 
 # Is there a newer NeverRed Script version?
 # ========================================================================================================================================
-$eVersion = "2.10.18"
+$eVersion = "2.10.20"
 $WebVersion = ""
 [bool]$NewerVersion = $false
 [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
@@ -19847,23 +19843,23 @@ If ($Download -eq "1") {
                 Remove-Item "$PSScriptRoot\$Product\$MSFSLogixChannelClear\*" -Recurse
                 Start-Transcript $LogPS | Out-Null
                 Set-Content -Path "$VersionPath" -Value "$Version"
+                $FolderPath = "FSLogix_Apps_" + $Version
             }
             Write-Host "Starting download of $Product $MSFSLogixChannelClear release $MSFSLogixArchitectureClear version $Version"
             If ($WhatIf -eq '0') {
                 Invoke-WebRequest -Uri $URL -OutFile ("$PSScriptRoot\$Product\$MSFSLogixChannelClear\" + ($Source))
-                #Get-Download $URL "$PSScriptRoot\$Product\$MSFSLogixChannelClear\" $Source -includeStats
                 expand-archive -path "$PSScriptRoot\$Product\$MSFSLogixChannelClear\$Source" -destinationpath "$PSScriptRoot\$Product\$MSFSLogixChannelClear"
                 Remove-Item -Path "$PSScriptRoot\$Product\$MSFSLogixChannelClear\$Source" -Force
                 Switch ($MSFSLogixArchitectureClear) {
                     x86 {
-                        Move-Item -Path "$PSScriptRoot\$Product\$MSFSLogixChannelClear\Win32\Release\*" -Destination "$PSScriptRoot\$Product\$MSFSLogixChannelClear"
+                        Move-Item -Path "$PSScriptRoot\$Product\$MSFSLogixChannelClear\$FolderPath\Win32\Release\*" -Destination "$PSScriptRoot\$Product\$MSFSLogixChannelClear"
                     }
                     x64 {
-                        Move-Item -Path "$PSScriptRoot\$Product\$MSFSLogixChannelClear\x64\Release\*" -Destination "$PSScriptRoot\$Product\$MSFSLogixChannelClear"
+                        Move-Item -Path "$PSScriptRoot\$Product\$MSFSLogixChannelClear\$FolderPath\x64\Release\*" -Destination "$PSScriptRoot\$Product\$MSFSLogixChannelClear"
                     }
                 }
-                Remove-Item -Path "$PSScriptRoot\$Product\$MSFSLogixChannelClear\Win32" -Force -Recurse
-                Remove-Item -Path "$PSScriptRoot\$Product\$MSFSLogixChannelClear\x64" -Force -Recurse
+                Remove-Item -Path "$PSScriptRoot\$Product\$MSFSLogixChannelClear\$FolderPath\Win32" -Force -Recurse
+                Remove-Item -Path "$PSScriptRoot\$Product\$MSFSLogixChannelClear\$FolderPath\x64" -Force -Recurse
                 Write-Verbose "Stop logging"
                 Stop-Transcript | Out-Null
             }
@@ -19875,12 +19871,13 @@ If ($Download -eq "1") {
                 If ((Test-Path "$PSScriptRoot\_ADMX\$Product\fslogix.admx" -PathType leaf)) {
                     Remove-Item -Path "$PSScriptRoot\_ADMX\$Product\fslogix.admx" -ErrorAction SilentlyContinue
                 }
-                Move-Item -Path "$PSScriptRoot\$Product\$MSFSLogixChannelClear\fslogix.admx" -Destination "$PSScriptRoot\_ADMX\$Product" -ErrorAction SilentlyContinue
+                Move-Item -Path "$PSScriptRoot\$Product\$MSFSLogixChannelClear\$FolderPath\fslogix.admx" -Destination "$PSScriptRoot\_ADMX\$Product" -ErrorAction SilentlyContinue
                 If (!(Test-Path -Path "$PSScriptRoot\_ADMX\$Product\en-US")) { New-Item -Path "$PSScriptRoot\_ADMX\$Product\en-US" -ItemType Directory | Out-Null }
                 If ((Test-Path "$PSScriptRoot\_ADMX\$Product\en-US\fslogix.adml" -PathType leaf)) {
                     Remove-Item -Path "$PSScriptRoot\_ADMX\$Product\en-US\fslogix.adml" -ErrorAction SilentlyContinue
                 }
-                Move-Item -Path "$PSScriptRoot\$Product\$MSFSLogixChannelClear\fslogix.adml" -Destination "$PSScriptRoot\_ADMX\$Product\en-US" -ErrorAction SilentlyContinue
+                Move-Item -Path "$PSScriptRoot\$Product\$MSFSLogixChannelClear\$FolderPath\fslogix.adml" -Destination "$PSScriptRoot\_ADMX\$Product\en-US" -ErrorAction SilentlyContinue
+                Remove-Item -Path "$PSScriptRoot\$Product\$MSFSLogixChannelClear\$FolderPath" -Force -Recurse
             }
             Write-Host -ForegroundColor Green "Copy of the new ADMX files version $Version finished!"
             Write-Output ""
